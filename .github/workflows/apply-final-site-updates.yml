@@ -1,0 +1,76 @@
+name: Apply final site updates
+
+on:
+  push:
+    paths:
+      - '.github/trigger-final-updates'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Apply final React updates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          app = Path('frontend/src/App.js')
+          text = app.read_text(encoding='utf-8')
+
+          marker = 'const prioritizeTrendLove = (items) =>'
+          if marker not in text:
+              needle = 'const getSocialProof = (productId) => {'
+              idx = text.index(needle)
+              end = text.index('\n};', idx) + 3
+              helper = '\n\nconst prioritizeTrendLove = (items) => [...items].sort((a, b) => {\n  const aTrend = a.id === "trend-love-ai" ? 0 : 1;\n  const bTrend = b.id === "trend-love-ai" ? 0 : 1;\n  return aTrend - bTrend;\n});\n'
+              text = text[:end] + helper + text[end:]
+
+          text = text.replace(
+              'const [products, setProducts] = useState(() => staticData.products.filter((product) => product.category === category).slice(0, 10));',
+              'const [products, setProducts] = useState(() => prioritizeTrendLove(staticData.products.filter((product) => product.category === category)).slice(0, 10));'
+          )
+          text = text.replace(
+              '.then((r) => setProducts(r.data)).catch(() => {});',
+              '.then((r) => setProducts(prioritizeTrendLove(r.data))).catch(() => {});'
+          )
+          text = text.replace(
+              '.then((r) => { setProducts(r.data); setLoading(false); })',
+              '.then((r) => { setProducts(prioritizeTrendLove(r.data)); setLoading(false); })'
+          )
+
+          state_marker = 'const isFreeNoWhatsApp = product.no_whatsapp === true;\n\n  return ('
+          if 'const [demoInterest, setDemoInterest]' not in text:
+              replacement = '''const isFreeNoWhatsApp = product.no_whatsapp === true;\n  const [demoInterest, setDemoInterest] = useState(() => Math.floor(Math.random() * 10001) + 10000);\n\n  useEffect(() => {\n    if (!isFreeNoWhatsApp) return undefined;\n    const timer = setInterval(() => {\n      setDemoInterest(Math.floor(Math.random() * 10001) + 10000);\n    }, 3000);\n    return () => clearInterval(timer);\n  }, [isFreeNoWhatsApp]);\n\n  return ('''
+              text = text.replace(state_marker, replacement)
+
+          card_marker = '        {/* Social proof */}\n        {!isFreeNoWhatsApp && (() => {'
+          demo_block = '''        {isFreeNoWhatsApp && (\n          <div className="flex items-center justify-center gap-1.5 text-[11px] text-pink-600 font-semibold mb-3 bg-pink-50 border border-pink-100 rounded-full py-1.5 px-2" data-testid={`demo-interest-${product.id}`}>\n            <span>✨</span>\n            <span>مؤشر اهتمام تجريبي: {demoInterest.toLocaleString("en-US")}</span>\n          </div>\n        )}\n        {/* Social proof for paid products */}\n        {!isFreeNoWhatsApp && (() => {'''
+          text = text.replace(card_marker, demo_block)
+
+          app.write_text(text, encoding='utf-8')
+
+          data_path = Path('frontend/src/staticData.json')
+          data = json.loads(data_path.read_text(encoding='utf-8'))
+          for product in data.get('products', []):
+              if product.get('id') == 'trend-love-ai':
+                  product['image'] = 'https://raw.githubusercontent.com/axx6090-hub/X/main/file_0000000072fc82109c6df1e2c14a0fbd.png'
+                  break
+          data_path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
+          PY
+
+      - name: Commit updates
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/App.js frontend/src/staticData.json
+          git diff --cached --quiet || git commit -m 'Apply final product ordering image and free-product indicator'
+          git push
