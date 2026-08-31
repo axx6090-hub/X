@@ -1,0 +1,29 @@
+name: Update Trend Love AI Image
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'file_0000000072fc82109c6df1e2c14a0fbd.png'
+permissions:
+  contents: write
+jobs:
+  update-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace image URL
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('frontend/src/staticData.json')
+          s = p.read_text()
+          s = s.replace('./images/trend-love-ai.jpg', 'https://raw.githubusercontent.com/axx6090-hub/X/main/file_0000000072fc82109c6df1e2c14a0fbd.png')
+          p.write_text(s)
+          PY
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add frontend/src/staticData.json
+          git diff --cached --quiet || git commit -m 'Use uploaded Trend Love AI image'
+          git push
