@@ -24,6 +24,13 @@ const getSocialProof = (productId) => {
   return { qty, hours };
 };
 
+const prioritizeTrendLove = (items) => [...items].sort((a, b) => {
+  const aTrend = a.id === "trend-love-ai" ? 0 : 1;
+  const bTrend = b.id === "trend-love-ai" ? 0 : 1;
+  return aTrend - bTrend;
+});
+
+
 // ============== CART CONTEXT ==============
 const CartContext = createContext(null);
 const useCart = () => useContext(CartContext);
@@ -277,6 +284,15 @@ const ProductCard = ({ product }) => {
   const isWish = wishlist.includes(product.id);
   const hasDiscount = product.sale_price && product.sale_price > product.price;
   const isFreeNoWhatsApp = product.no_whatsapp === true;
+  const [demoInterest, setDemoInterest] = useState(() => Math.floor(Math.random() * 10001) + 10000);
+
+  useEffect(() => {
+    if (!isFreeNoWhatsApp) return undefined;
+    const timer = setInterval(() => {
+      setDemoInterest(Math.floor(Math.random() * 10001) + 10000);
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [isFreeNoWhatsApp]);
 
   return (
     <div className="group relative bg-white rounded-2xl overflow-hidden border border-pink-50 hover:border-pink-200 hover:shadow-xl transition-all duration-300" data-testid={`product-card-${product.id}`}>
@@ -308,7 +324,13 @@ const ProductCard = ({ product }) => {
           <span className="text-pink-600 font-extrabold text-base">{isFreeNoWhatsApp ? "مجاني" : formatPrice(product.price)}</span>
           {hasDiscount && <span className="text-gray-400 line-through text-xs">{formatPrice(product.sale_price)}</span>}
         </div>
-        {/* Social proof */}
+        {isFreeNoWhatsApp && (
+          <div className="flex items-center justify-center gap-1.5 text-[11px] text-pink-600 font-semibold mb-3 bg-pink-50 border border-pink-100 rounded-full py-1.5 px-2" data-testid={`demo-interest-${product.id}`}>
+            <span>✨</span>
+            <span>مؤشر اهتمام تجريبي: {demoInterest.toLocaleString("en-US")}</span>
+          </div>
+        )}
+        {/* Social proof for paid products */}
         {!isFreeNoWhatsApp && (() => {
           const sp = getSocialProof(product.id);
           return (
@@ -403,9 +425,9 @@ const FeatureStrip = () => {
 
 // ============== PRODUCT SECTION ==============
 const ProductSection = ({ title, emoji, category, viewAllLink }) => {
-  const [products, setProducts] = useState(() => staticData.products.filter((product) => product.category === category).slice(0, 10));
+  const [products, setProducts] = useState(() => prioritizeTrendLove(staticData.products.filter((product) => product.category === category)).slice(0, 10));
   useEffect(() => {
-    axios.get(`${API}/products?category=${category}&limit=10`).then((r) => setProducts(r.data)).catch(() => {});
+    axios.get(`${API}/products?category=${category}&limit=10`).then((r) => setProducts(prioritizeTrendLove(r.data))).catch(() => {});
   }, [category]);
 
   if (products.length === 0) return null;
@@ -535,7 +557,7 @@ const Collection = () => {
     } else {
       url = `${API}/products?category=${slug}&limit=100`;
     }
-    axios.get(url).then((r) => { setProducts(r.data); setLoading(false); }).catch(() => setLoading(false));
+    axios.get(url).then((r) => { setProducts(prioritizeTrendLove(r.data)); setLoading(false); }).catch(() => setLoading(false));
   }, [slug]);
 
   const title = titles[slug] || "المنتجات";
@@ -565,7 +587,7 @@ const SearchPage = () => {
   const [products, setProducts] = useState([]);
 
   useEffect(() => {
-    axios.get(`${API}/products?search=${encodeURIComponent(q)}`).then((r) => setProducts(r.data)).catch(() => {});
+    axios.get(`${API}/products?search=${encodeURIComponent(q)}`).then((r) => setProducts(prioritizeTrendLove(r.data))).catch(() => {});
   }, [q]);
 
   return (
