@@ -1,2 +1,21 @@
 /* App-specific overrides */
 .App { min-height: 100vh; }
+
+/* Make Trend Love AI the first product visually in its grid. */
+[data-testid="product-card-trend-love-ai"] {
+  order: -100;
+}
+
+/* Social-proof line shown under free products. */
+[data-free-social-proof="true"] {
+  margin-top: 10px;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.5;
+  font-weight: 700;
+  color: #db2777;
+  background: #fdf2f8;
+  border: 1px solid #fbcfe8;
+  border-radius: 9999px;
+  padding: 7px 10px;
+}
