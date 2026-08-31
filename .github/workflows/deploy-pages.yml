@@ -36,7 +36,7 @@ jobs:
         working-directory: frontend
         env:
           CI: "false"
-          PUBLIC_URL: /X
+          PUBLIC_URL: /X/
         run: yarn build
 
       - name: Setup Pages
