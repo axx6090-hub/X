@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800;900&family=Cairo:wght@400;600;700;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Tajawal', 'Cairo', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: #fff;
+    color: #1f2937;
+}
+
+* { box-sizing: border-box; }
+
+/* RTL fixes */
+[dir="rtl"] {
+    direction: rtl;
+}
+
+/* Marquee for announcement bar */
+@keyframes marquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(100%); }
+}
+.marquee {
+    display: inline-block;
+    animation: marquee 25s linear infinite;
+    will-change: transform;
+}
+
+/* Line-clamp helpers */
+.line-clamp-1 {
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Smooth scrollbar for cart */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track { background: #fce7f3; }
+::-webkit-scrollbar-thumb { background: #f9a8d4; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #ec4899; }
+
+/* Selection */
+::selection {
+    background: #fbcfe8;
+    color: #831843;
+}
+
+@layer base {
+    :root {
+        --background: 0 0% 100%;
+        --foreground: 0 0% 9%;
+        --primary: 330 81% 60%;
+        --primary-foreground: 0 0% 100%;
+        --border: 330 80% 95%;
+        --ring: 330 81% 60%;
+        --radius: 0.75rem;
+    }
+}
