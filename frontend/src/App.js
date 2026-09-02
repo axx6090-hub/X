@@ -1058,18 +1058,8 @@ const Checkout = () => {
 // ============== FOOTER ==============
 const Footer = () => (
   <footer className="bg-gradient-to-br from-pink-900 via-rose-900 to-pink-950 text-pink-100">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
-      <h3 className="text-3xl font-extrabold mb-3"><span className="text-pink-300">كليشة</span></h3>
-      <p className="text-pink-200/80 text-sm max-w-xl mx-auto mb-6">براند مميز لمنتجات العناية بالبشرة في العراق - منتجات مضمونة وتوصيل سريع 💕</p>
-      <a
-        href={`https://wa.me/${WHATSAPP_NUMBER}`}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-2 bg-[#25d366] hover:bg-green-600 text-white px-6 py-3 rounded-full font-semibold transition"
-      >
-        <MessageCircle size={18} /> تواصلي عبر واتساب
-      </a>
-      <div className="border-t border-pink-800/50 mt-8 pt-6 text-sm text-pink-300/70">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center">
+      <div className="text-sm text-pink-300/70">
         © 2026 كليشة - جميع الحقوق محفوظة
       </div>
     </div>
