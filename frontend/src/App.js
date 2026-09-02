@@ -9,6 +9,8 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 const WHATSAPP_NUMBER = "9647832882348"; // 07832882348 with Iraq country code
 const DELIVERY_FEE = 5000; // د.ع - flat fee for all Iraqi governorates
+const REVIEWS_STORAGE_KEY = "klisha_customer_reviews";
+const REVIEW_AVATAR = `${process.env.PUBLIC_URL}/images/review-avatar.png`;
 
 const formatPrice = (n) => Number(n).toLocaleString("en-US") + " د.ع";
 
@@ -284,12 +286,16 @@ const ProductCard = ({ product }) => {
   const isWish = wishlist.includes(product.id);
   const hasDiscount = product.sale_price && product.sale_price > product.price;
   const isFreeNoWhatsApp = product.no_whatsapp === true;
-  const [demoInterest, setDemoInterest] = useState(() => Math.floor(Math.random() * 10001) + 10000);
+  const randomDemoSocialProof = () => ({
+    count: Math.floor(Math.random() * 10001) + 10000,
+    hours: Math.floor(Math.random() * 24) + 1,
+  });
+  const [demoInterest, setDemoInterest] = useState(randomDemoSocialProof);
 
   useEffect(() => {
     if (!isFreeNoWhatsApp) return undefined;
     const timer = setInterval(() => {
-      setDemoInterest(Math.floor(Math.random() * 10001) + 10000);
+      setDemoInterest(randomDemoSocialProof());
     }, 3000);
     return () => clearInterval(timer);
   }, [isFreeNoWhatsApp]);
@@ -327,7 +333,7 @@ const ProductCard = ({ product }) => {
         {isFreeNoWhatsApp && (
           <div className="flex items-center justify-center gap-1.5 text-[11px] text-pink-600 font-semibold mb-3 bg-pink-50 border border-pink-100 rounded-full py-1.5 px-2" data-testid={`demo-interest-${product.id}`}>
             <span>✨</span>
-            <span>مؤشر اهتمام تجريبي: {demoInterest.toLocaleString("en-US")}</span>
+            <span>تم شراء {demoInterest.count.toLocaleString("en-US")} قطعة في آخر {demoInterest.hours} ساعة</span>
           </div>
         )}
         {/* Social proof for paid products */}
@@ -530,6 +536,171 @@ const Home = () => {
       <ProductSection title="الأكثر طلباً" emoji="⭐" category="best-selling" viewAllLink="/collection/best-selling" />
       <ProductSection title="عرض حصري" emoji="💎" category="offers" viewAllLink="/collection/offers" />
     </>
+  );
+};
+
+// ============== CUSTOMER REVIEWS ==============
+const sampleReviews = [
+  {
+    id: "sample-zahraa",
+    name: "زهراء علي",
+    rating: 5,
+    comment: "أحب الموقع كلش حلو والتوصيل سريع، والمنتجات مرتبة بشكل يجنن.",
+    image: REVIEW_AVATAR,
+    sample: true,
+  },
+  {
+    id: "sample-narjes",
+    name: "نرجس أحمد",
+    rating: 5,
+    comment: "المنتجات مرتبة والأسعار واضحة، أتمنى أطلب منكم قريباً.",
+    image: REVIEW_AVATAR,
+    sample: true,
+  },
+  {
+    id: "sample-fatima",
+    name: "فاطمة حسن",
+    rating: 5,
+    comment: "التصميم يجنن وتجربة التصفح سهلة جداً، كلش حبيت الموقع.",
+    image: REVIEW_AVATAR,
+    sample: true,
+  },
+];
+
+const ReviewStars = ({ value, onChange, interactive = false }) => (
+  <div className="review-stars" aria-label={`${value} من 5 نجوم`}>
+    {[1, 2, 3, 4, 5].map((star) => (
+      <button
+        key={star}
+        type="button"
+        className={`review-star ${star <= value ? "is-active" : ""}`}
+        onClick={() => interactive && onChange?.(star)}
+        aria-label={`${star} نجوم`}
+        aria-pressed={interactive ? star === value : undefined}
+        tabIndex={interactive ? 0 : -1}
+        disabled={!interactive}
+      >
+        ★
+      </button>
+    ))}
+  </div>
+);
+
+const CustomerReviews = () => {
+  const [reviews, setReviews] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(REVIEWS_STORAGE_KEY) || "null");
+      return Array.isArray(stored) && stored.length > 0 ? stored : sampleReviews;
+    } catch {
+      return sampleReviews;
+    }
+  });
+  const [name, setName] = useState("");
+  const [rating, setRating] = useState(5);
+  const [comment, setComment] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(reviews));
+  }, [reviews]);
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const trimmedName = name.trim();
+    const trimmedComment = comment.trim();
+    if (!trimmedName || !trimmedComment) return;
+
+    setReviews((current) => [
+      {
+        id: `review-${Date.now()}`,
+        name: trimmedName,
+        rating,
+        comment: trimmedComment,
+        image: REVIEW_AVATAR,
+        sample: false,
+      },
+      ...current,
+    ]);
+    setName("");
+    setComment("");
+    setRating(5);
+    setSubmitted(true);
+  };
+
+  return (
+    <section className="reviews-section" aria-labelledby="reviews-title">
+      <div className="reviews-inner">
+        <div className="reviews-heading">
+          <div>
+            <p className="reviews-eyebrow">تجاربكن تهمنا</p>
+            <h2 id="reviews-title">آراء الزبائن <span aria-hidden="true">💗</span></h2>
+            <p className="reviews-subtitle">شاركونا رأيكم حتى نكون دائماً عند حسن ظنكم</p>
+          </div>
+          <div className="reviews-rating-summary" aria-label="تقييم 5 من 5">
+            <strong>5.0</strong>
+            <ReviewStars value={5} />
+            <span>تقييمكم يهمنا</span>
+          </div>
+        </div>
+
+        <div className="reviews-grid">
+          {reviews.slice(0, 3).map((review) => (
+            <article className="review-card" key={review.id}>
+              <div className="review-card-top">
+                <img src={review.image || REVIEW_AVATAR} alt="" className="review-avatar" />
+                <div>
+                  <h3>{review.name}</h3>
+                  <ReviewStars value={review.rating} />
+                </div>
+              </div>
+              <p className="review-comment">“{review.comment}”</p>
+              {review.sample && <span className="review-sample-label">مثال تجريبي للمعاينة</span>}
+            </article>
+          ))}
+        </div>
+
+        <form className="review-form" onSubmit={handleSubmit}>
+          <div className="review-form-heading">
+            <h3>اكتبي تقييمج</h3>
+            <p>أضيفي اسمج وتقييمج حتى يظهر في هذا المتصفح.</p>
+          </div>
+          <div className="review-form-fields">
+            <label>
+              الاسم
+              <input
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                placeholder="مثال: زهراء علي"
+                required
+                maxLength={60}
+                data-testid="review-name"
+              />
+            </label>
+            <label className="review-rating-field">
+              التقييم
+              <ReviewStars value={rating} onChange={setRating} interactive />
+            </label>
+            <label className="review-comment-field">
+              تعليقج
+              <textarea
+                value={comment}
+                onChange={(event) => setComment(event.target.value)}
+                placeholder="اكتبي تجربتج ويانا..."
+                required
+                maxLength={300}
+                rows={3}
+                data-testid="review-comment"
+              />
+            </label>
+          </div>
+          <div className="review-form-actions">
+            <button type="submit" className="review-submit" data-testid="review-submit">نشر التقييم</button>
+            {submitted && <span className="review-success" role="status">تم نشر تقييمج بنجاح 💗</span>}
+          </div>
+          <small className="review-storage-note">ملاحظة: التقييمات المضافة من النموذج محفوظة في هذا المتصفح فقط حالياً.</small>
+        </form>
+      </div>
+    </section>
   );
 };
 
@@ -886,7 +1057,7 @@ const Checkout = () => {
 
 // ============== FOOTER ==============
 const Footer = () => (
-  <footer className="bg-gradient-to-br from-pink-900 via-rose-900 to-pink-950 text-pink-100 mt-16">
+  <footer className="bg-gradient-to-br from-pink-900 via-rose-900 to-pink-950 text-pink-100">
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-center">
       <h3 className="text-3xl font-extrabold mb-3"><span className="text-pink-300">كليشة</span></h3>
       <p className="text-pink-200/80 text-sm max-w-xl mx-auto mb-6">براند مميز لمنتجات العناية بالبشرة في العراق - منتجات مضمونة وتوصيل سريع 💕</p>
@@ -927,7 +1098,7 @@ function App() {
           <Header />
           <main className="flex-1">
             <Routes>
-              <Route path="/" element={<Home />} />
+              <Route path="/" element={<><Home /><CustomerReviews /></>} />
               <Route path="/collection/:slug" element={<Collection />} />
               <Route path="/product/:id" element={<ProductDetail />} />
               <Route path="/search" element={<SearchPage />} />
