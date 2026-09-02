@@ -10,7 +10,7 @@ const API = `${BACKEND_URL}/api`;
 const WHATSAPP_NUMBER = "9647832882348"; // 07832882348 with Iraq country code
 const DELIVERY_FEE = 5000; // د.ع - flat fee for all Iraqi governorates
 const REVIEWS_STORAGE_KEY = "klisha_customer_reviews";
-const REVIEW_AVATAR = `${process.env.PUBLIC_URL}/images/review-avatar.png`;
+const REVIEW_AVATAR = `${process.env.PUBLIC_URL}/images/review-avatar.webp`;
 
 const formatPrice = (n) => Number(n).toLocaleString("en-US") + " د.ع";
 
@@ -317,7 +317,14 @@ const ProductCard = ({ product }) => {
 
       <Link to={`/product/${product.id}`} className="block">
         <div className="aspect-square bg-gradient-to-br from-pink-50 to-rose-50 overflow-hidden">
-          <img src={product.image} alt={product.name} loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+          <img
+            src={product.image}
+            alt={product.name}
+            loading={product.id === "trend-love-ai" ? "eager" : "lazy"}
+            fetchPriority={product.id === "trend-love-ai" ? "high" : "auto"}
+            decoding="async"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+          />
         </div>
       </Link>
       <div className="p-4">
@@ -647,7 +654,7 @@ const CustomerReviews = () => {
           {reviews.slice(0, 3).map((review) => (
             <article className="review-card" key={review.id}>
               <div className="review-card-top">
-                <img src={review.image || REVIEW_AVATAR} alt="" className="review-avatar" />
+                <img src={review.image || REVIEW_AVATAR} alt="" loading="lazy" decoding="async" className="review-avatar" />
                 <div>
                   <h3>{review.name}</h3>
                   <ReviewStars value={review.rating} />
