@@ -440,7 +440,11 @@ const FeatureStrip = () => {
 const ProductSection = ({ title, emoji, category, viewAllLink }) => {
   const [products, setProducts] = useState(() => prioritizeTrendLove(staticData.products.filter((product) => product.category === category)).slice(0, 10));
   useEffect(() => {
-    axios.get(`${API}/products?category=${category}&limit=10`).then((r) => setProducts(prioritizeTrendLove(r.data))).catch(() => {});
+    axios.get(`${API}/products?category=${category}&limit=10`).then((r) => {
+      if (Array.isArray(r.data) && r.data.length > 0) {
+        setProducts(prioritizeTrendLove(r.data));
+      }
+    }).catch(() => {});
   }, [category]);
 
   if (products.length === 0) return null;
@@ -517,7 +521,11 @@ const SkinTypesSection = () => {
 const Home = () => {
   const [count, setCount] = useState(staticData.products.length);
   useEffect(() => {
-    axios.get(`${API}/products?limit=1`).then((r) => setCount(r.data.length)).catch(() => setCount(0));
+    axios.get(`${API}/products?limit=1`).then((r) => {
+      if (Array.isArray(r.data) && r.data.length > 0) {
+        setCount(r.data.length);
+      }
+    }).catch(() => {});
   }, []);
 
   if (count === 0) {
@@ -1088,6 +1096,13 @@ const FloatingWhatsApp = () => (
 
 // ============== APP ==============
 function App() {
+  useEffect(() => {
+    const telegramWebApp = window.Telegram?.WebApp;
+    if (!telegramWebApp) return;
+    telegramWebApp.ready();
+    telegramWebApp.expand();
+  }, []);
+
   return (
     <CartProvider>
       <HashRouter>
