@@ -1,0 +1,19 @@
+{
+  "name": "tokkma-store",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "npm --prefix frontend run build",
+    "dev": "wrangler dev --port 3000",
+    "db:local": "wrangler d1 migrations apply DB --local",
+    "test": "node --test tests/*.test.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "admin:password": "node scripts/admin-password.mjs",
+    "test:ui": "npm --prefix frontend test -- --watchAll=false --runInBand"
+  },
+  "devDependencies": {
+    "wrangler": "4.142.0",
+    "miniflare": "4.20260730.0",
+    "esbuild": "0.28.1"
+  }
+}

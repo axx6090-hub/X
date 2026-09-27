@@ -2,29 +2,18 @@ import React, { useEffect, useState, createContext, useContext, useMemo } from "
 import { HashRouter, Routes, Route, Link, useParams, useNavigate, useLocation } from "react-router-dom";
 import axios from "./localAxios";
 import staticData from "./staticData.json";
+import Admin from "./Admin";
+import { StoreProvider, useStore } from "./StoreContext";
+import { api, writeApi, STATIC_MODE } from "./storeApi";
+import LocationPicker, { locationUrl, validMapsUrl } from "./LocationPicker";
 import { ShoppingBag, Heart, Search, Menu, X, ChevronLeft, Plus, Minus, Trash2, MessageCircle, Truck, ShieldCheck, Sparkles, Phone, MapPin, Instagram, Facebook } from "lucide-react";
 import "@/App.css";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-const API = `${BACKEND_URL}/api`;
-const WHATSAPP_NUMBER = "9647832882348"; // 07832882348 with Iraq country code
-const DELIVERY_FEE = 5000; // د.ع - flat fee for all Iraqi governorates
+const API = "/api";
 const REVIEWS_STORAGE_KEY = "klisha_customer_reviews";
 const REVIEW_AVATAR = `${process.env.PUBLIC_URL}/images/review-avatar.webp`;
 
 const formatPrice = (n) => Number(n).toLocaleString("en-US") + " د.ع";
-
-// Session-level seed: changes on every page load/refresh
-const SESSION_SEED = Math.floor(Math.random() * 100000) + Date.now();
-
-// Deterministic per session, but different across page loads
-const getSocialProof = (productId) => {
-  let hash = SESSION_SEED;
-  for (let i = 0; i < productId.length; i++) hash = (hash * 31 + productId.charCodeAt(i)) >>> 0;
-  const qty = 3 + (hash % 22); // 3..24 pieces
-  const hours = 6 + ((hash >>> 5) % 19); // 6..24 hours
-  return { qty, hours };
-};
 
 const prioritizeTrendLove = (items) => [...items].sort((a, b) => {
   const aTrend = a.id === "trend-love-ai" ? 0 : 1;
@@ -38,9 +27,10 @@ const CartContext = createContext(null);
 const useCart = () => useContext(CartContext);
 
 const CartProvider = ({ children }) => {
+  const { settings } = useStore();
   const [items, setItems] = useState(() => {
     try {
-      return JSON.parse(sessionStorage.getItem("bp_cart") || "[]");
+      return JSON.parse(localStorage.getItem("tokkma_cart") || "[]");
     } catch {
       return [];
     }
@@ -55,7 +45,7 @@ const CartProvider = ({ children }) => {
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   useEffect(() => {
-    sessionStorage.setItem("bp_cart", JSON.stringify(items));
+    localStorage.setItem("tokkma_cart", JSON.stringify(items));
   }, [items]);
   useEffect(() => {
     localStorage.setItem("bp_wishlist", JSON.stringify(wishlist));
@@ -65,7 +55,7 @@ const CartProvider = ({ children }) => {
     setItems((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
-        return prev.map((i) => (i.id === product.id ? { ...i, qty: i.qty + qty } : i));
+        return prev.map((i) => (i.id === product.id ? { ...i, qty: Math.min(99, i.qty + qty) } : i));
       }
       return [...prev, { id: product.id, name: product.name, price: product.price, image: product.image, qty, free_delivery: !!product.free_delivery }];
     });
@@ -74,6 +64,7 @@ const CartProvider = ({ children }) => {
   const removeFromCart = (id) => setItems((prev) => prev.filter((i) => i.id !== id));
   const updateQty = (id, qty) => {
     if (qty <= 0) return removeFromCart(id);
+    qty = Math.min(99, qty);
     setItems((prev) => prev.map((i) => (i.id === id ? { ...i, qty } : i)));
   };
   const clearCart = () => setItems([]);
@@ -84,7 +75,7 @@ const CartProvider = ({ children }) => {
   const totalQty = items.reduce((s, i) => s + i.qty, 0);
   const totalPrice = items.reduce((s, i) => s + i.price * i.qty, 0);
   // Free delivery if cart is non-empty AND every item has free_delivery flag
-  const deliveryFee = items.length > 0 && items.every((i) => i.free_delivery) ? 0 : DELIVERY_FEE;
+  const deliveryFee = items.length > 0 && items.every((i) => i.free_delivery) ? 0 : settings.delivery_fee;
 
   return (
     <CartContext.Provider value={{ items, addToCart, removeFromCart, updateQty, clearCart, totalQty, totalPrice, deliveryFee, isCartOpen, setIsCartOpen, wishlist, toggleWishlist }}>
@@ -95,6 +86,7 @@ const CartProvider = ({ children }) => {
 
 // ============== HEADER ==============
 const Header = () => {
+  const { settings, categories } = useStore();
   const { totalQty, setIsCartOpen, wishlist } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -110,17 +102,14 @@ const Header = () => {
     }
   };
 
-  const navLinks = [
-    { name: "العروض", to: "/collection/offers" },
-    { name: "الأكثر طلباً", to: "/collection/best-selling" },
-  ];
+  const navLinks = [{ name: "كل المنتجات", to: "/" }, ...categories.filter(c => c.product_count > 0 || STATIC_MODE).slice(0, 4).map(c => ({ name: c.name, to: "/collection/category-" + c.slug }))];
 
   return (
     <>
       {/* Top announcement bar */}
       <div className="bg-[#e91e63] text-white text-center text-xs sm:text-sm py-2 px-4 overflow-hidden">
         <div className="marquee whitespace-nowrap">
-          🚚 توصيل لكافة محافظات العراق بـ 5,000 د.ع فقط &nbsp; • &nbsp; ✨ منتجات أصلية 100% &nbsp; • &nbsp; 💕 اطلبي الحين عبر واتساب &nbsp; •
+          {settings.announcement}
         </div>
       </div>
 
@@ -135,7 +124,7 @@ const Header = () => {
             {/* Logo */}
             <Link to="/" className="flex items-center gap-2" data-testid="logo-link">
               <div className="text-2xl sm:text-3xl font-extrabold tracking-tight">
-                <span className="text-[#e91e63]">كليشة</span>
+                <span className="text-[#e91e63]">{settings.store_name}</span>
               </div>
             </Link>
 
@@ -195,7 +184,7 @@ const Header = () => {
         <div className="fixed inset-0 z-50 bg-black/50 lg:hidden" onClick={() => setMenuOpen(false)}>
           <div className="absolute top-0 right-0 h-full w-80 max-w-[85%] bg-white p-6 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-8">
-              <span className="text-xl font-extrabold text-[#e91e63]">كليشة</span>
+              <span className="text-xl font-extrabold text-[#e91e63]">{settings.store_name}</span>
               <button onClick={() => setMenuOpen(false)} data-testid="mobile-menu-close"><X size={24} /></button>
             </div>
             <nav className="flex flex-col gap-1 text-base">
@@ -286,19 +275,6 @@ const ProductCard = ({ product }) => {
   const isWish = wishlist.includes(product.id);
   const hasDiscount = product.sale_price && product.sale_price > product.price;
   const isFreeNoWhatsApp = product.no_whatsapp === true;
-  const randomDemoSocialProof = () => ({
-    count: Math.floor(Math.random() * 10001) + 10000,
-    hours: Math.floor(Math.random() * 24) + 1,
-  });
-  const [demoInterest, setDemoInterest] = useState(randomDemoSocialProof);
-
-  useEffect(() => {
-    if (!isFreeNoWhatsApp) return undefined;
-    const timer = setInterval(() => {
-      setDemoInterest(randomDemoSocialProof());
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [isFreeNoWhatsApp]);
 
   return (
     <div className="group relative bg-white rounded-2xl overflow-hidden border border-pink-50 hover:border-pink-200 hover:shadow-xl transition-all duration-300" data-testid={`product-card-${product.id}`}>
@@ -337,22 +313,7 @@ const ProductCard = ({ product }) => {
           <span className="text-pink-600 font-extrabold text-base">{isFreeNoWhatsApp ? "مجاني" : formatPrice(product.price)}</span>
           {hasDiscount && <span className="text-gray-400 line-through text-xs">{formatPrice(product.sale_price)}</span>}
         </div>
-        {isFreeNoWhatsApp && (
-          <div className="flex items-center justify-center gap-1.5 text-[11px] text-pink-600 font-semibold mb-3 bg-pink-50 border border-pink-100 rounded-full py-1.5 px-2" data-testid={`demo-interest-${product.id}`}>
-            <span>✨</span>
-            <span>تم شراء {demoInterest.count.toLocaleString("en-US")} قطعة في آخر {demoInterest.hours} ساعة</span>
-          </div>
-        )}
-        {/* Social proof for paid products */}
-        {!isFreeNoWhatsApp && (() => {
-          const sp = getSocialProof(product.id);
-          return (
-            <div className="flex items-center gap-1 text-[11px] text-red-500 font-semibold mb-3 animate-pulse">
-              <span>🔥</span>
-              <span>تم شراء {sp.qty} قطعة في آخر {sp.hours} ساعة</span>
-            </div>
-          );
-        })()}
+        <p className="text-xs text-gray-500 mb-3">{isFreeNoWhatsApp ? "محتوى مجاني — متاح للنسخ" : "متاح للطلب عبر واتساب"}</p>
         {isFreeNoWhatsApp ? (
           <Link
             to={`/product/${product.id}`}
@@ -385,7 +346,7 @@ const Hero = () => {
   useEffect(() => {
     const t = setInterval(() => setI((p) => (p + 1) % slides.length), 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [slides.length]);
 
   return (
     <section className="relative bg-gradient-to-br from-pink-100 via-rose-50 to-pink-50 overflow-hidden">
@@ -437,16 +398,7 @@ const FeatureStrip = () => {
 };
 
 // ============== PRODUCT SECTION ==============
-const ProductSection = ({ title, emoji, category, viewAllLink }) => {
-  const [products, setProducts] = useState(() => prioritizeTrendLove(staticData.products.filter((product) => product.category === category)).slice(0, 10));
-  useEffect(() => {
-    axios.get(`${API}/products?category=${category}&limit=10`).then((r) => {
-      if (Array.isArray(r.data) && r.data.length > 0) {
-        setProducts(prioritizeTrendLove(r.data));
-      }
-    }).catch(() => {});
-  }, [category]);
-
+const ProductSection = ({ title, emoji, category, viewAllLink, products }) => {
   if (products.length === 0) return null;
 
   return (
@@ -519,39 +471,24 @@ const SkinTypesSection = () => {
 
 // ============== HOME ==============
 const Home = () => {
-  const [count, setCount] = useState(staticData.products.length);
+  const { categories, error: storeError, settings, refresh } = useStore();
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [retry, setRetry] = useState(0);
   useEffect(() => {
-    axios.get(`${API}/products?limit=1`).then((r) => {
-      if (Array.isArray(r.data) && r.data.length > 0) {
-        setCount(r.data.length);
-      }
-    }).catch(() => {});
-  }, []);
-
-  if (count === 0) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-24 text-center">
-        <div className="text-6xl mb-5">🌸</div>
-        <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-3">قريباً منتجات جديدة!</h2>
-        <p className="text-gray-500 mb-6">نعمل على إضافة منتجاتنا المميزة - تابعونا قريباً 💕</p>
-        <a
-          href={`https://wa.me/${WHATSAPP_NUMBER}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 bg-[#25d366] hover:bg-green-600 text-white px-6 py-3 rounded-full font-bold transition"
-        >
-          <MessageCircle size={20} /> تواصلي معنا عبر واتساب
-        </a>
-      </div>
-    );
-  }
-
-  return (
-    <>
-      <ProductSection title="الأكثر طلباً" emoji="⭐" category="best-selling" viewAllLink="/collection/best-selling" />
-      <ProductSection title="عرض حصري" emoji="💎" category="offers" viewAllLink="/collection/offers" />
-    </>
-  );
+    let alive = true; setLoading(true); setError("");
+    axios.get(`${API}/products`).then(r => { if (alive) setProducts(prioritizeTrendLove(r.data)); }).catch(e => { if (alive) setError(e.message); }).finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [retry]);
+  if (error || storeError) return <div className="max-w-xl mx-auto text-center py-20 px-4"><p role="alert" className="text-gray-600 mb-4">تعذر تحميل المتجر. حاول مرة أخرى.</p><button className="admin-button" onClick={() => { refresh(); setRetry(retry + 1); }}>إعادة المحاولة</button></div>;
+  if (loading) return <div className="py-24 text-center text-gray-500">جاري تحميل المنتجات…</div>;
+  if (!products.length) return <div className="py-24 text-center px-4"><h1 className="text-2xl font-bold mb-4">قريباً منتجات جديدة</h1><p className="text-gray-500">تابع {settings.store_name} للاطلاع على الإضافات القادمة.</p></div>;
+  const populated = categories.filter(c => products.some(p => p.category === c.slug));
+  return <>
+    <div className="max-w-7xl mx-auto px-4 pt-7 flex gap-2 overflow-x-auto" aria-label="تصفح الأقسام">{populated.map(c => <Link key={c.id} className="whitespace-nowrap rounded-full px-5 py-2 border border-pink-100 text-pink-700 bg-pink-50 text-sm font-bold" to={`/collection/category-${c.slug}`}>{c.name}</Link>)}</div>
+    {populated.map(c => <ProductSection key={c.id} title={c.name} emoji={c.slug === 'offers' ? '💎' : ''} category={c.slug} products={products.filter(p => p.category === c.slug)} viewAllLink={`/collection/category-${c.slug}`} />)}
+  </>;
 };
 
 // ============== CUSTOMER REVIEWS ==============
@@ -721,6 +658,7 @@ const CustomerReviews = () => {
 
 // ============== COLLECTION PAGE ==============
 const Collection = () => {
+  const { categories } = useStore();
   const { slug } = useParams();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -746,7 +684,7 @@ const Collection = () => {
     axios.get(url).then((r) => { setProducts(prioritizeTrendLove(r.data)); setLoading(false); }).catch(() => setLoading(false));
   }, [slug]);
 
-  const title = titles[slug] || "المنتجات";
+  const title = categories.find(c => c.slug === slug.replace(/^category-/, ""))?.name || titles[slug] || "المنتجات";
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -842,17 +780,6 @@ const ProductDetail = () => {
             <span className="text-3xl font-extrabold text-pink-600">{isFreeNoWhatsApp ? "مجاني" : formatPrice(product.price)}</span>
             {hasDiscount && <span className="text-gray-400 line-through text-lg">{formatPrice(product.sale_price)}</span>}
           </div>
-          {/* Social proof banner */}
-          {!isFreeNoWhatsApp && (() => {
-            const sp = getSocialProof(product.id);
-            return (
-              <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 text-sm font-bold px-3 py-2 rounded-full mb-6 animate-pulse w-fit">
-                <span className="text-base">🔥</span>
-                <span>تم شراء {sp.qty} قطعة في آخر {sp.hours} ساعة</span>
-              </div>
-            );
-          })()}
-
           {product.description && <p className="text-gray-600 leading-relaxed mb-6 whitespace-pre-line">{product.description}</p>}
 
           {isFreeNoWhatsApp ? (
@@ -939,53 +866,45 @@ const WishlistPage = () => {
 
 // ============== CHECKOUT (WhatsApp redirect) ==============
 const Checkout = () => {
+  const [location, setLocation] = useState({ location: null, maps_url: "" });
+  const [error, setError] = useState("");
+  const [receipt, setReceipt] = useState(null);
+  const [orderId] = useState(() => crypto.randomUUID());
   const { items, totalPrice, clearCart, deliveryFee } = useCart();
   const navigate = useNavigate();
   const [form, setForm] = useState({ name: "", phone: "", city: "", address: "", notes: "" });
   const [sent, setSent] = useState(false);
   const isKidsVideoOnly = items.length > 0 && items.every((item) => item.id === "kids-video-design");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (items.length === 0) return;
-
-    const grandTotal = totalPrice + deliveryFee;
-    const deliveryLine = deliveryFee === 0
-      ? "🚚 التوصيل: مجاني 🎉"
-      : `🚚 التوصيل (كل المحافظات): ${formatPrice(deliveryFee)}`;
-    const lines = [
-      "🌸 طلب جديد - كليشة 🌸",
-      "━━━━━━━━━━━━━━━",
-      "",
-      "👤 بيانات الزبونة",
-      `• الاسم: ${form.name || "غير مذكور"}`,
-      `• الهاتف: ${form.phone || "غير مذكور"}`,
-      `• المحافظة: ${form.city || "غير مذكور"}`,
-      `• العنوان: ${form.address || "غير مذكور"}`,
-      form.notes ? `• ملاحظات: ${form.notes}` : null,
-      "",
-      "━━━━━━━━━━━━━━━",
-      "🛍️ تفاصيل الطلب",
-      "",
-      ...items.map((i, idx) => `${idx + 1}) ${i.name}\n     ${i.qty} × ${formatPrice(i.price)}  =  ${formatPrice(i.price * i.qty)}`),
-      "",
-      "━━━━━━━━━━━━━━━",
-      `🧾 مجموع المنتجات: ${formatPrice(totalPrice)}`,
-      deliveryLine,
-      `💰 المبلغ الإجمالي: ${formatPrice(grandTotal)}`,
-      "━━━━━━━━━━━━━━━",
-      "",
-      "شكراً لطلبكم 💕"
-    ].filter(Boolean).join("\n");
-
-    const url = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(lines)}`;
-    setSent(true);
-    setTimeout(() => {
-      window.open(url, "_blank");
-      clearCart();
-      navigate("/");
-    }, 600);
+    if (!items.length || sent) return;
+    if (!validMapsUrl(location.maps_url)) { setError("تحقق من رابط Google Maps أو امسحه للمتابعة بدونه"); return; }
+    if (STATIC_MODE) { setError("إرسال الطلبات متاح على موقع المتجر المتصل بقاعدة البيانات"); return; }
+    setSent(true); setError("");
+    try {
+      const result = await writeApi('/orders', 'POST', { id: orderId, ...form, ...location, items: items.map(i => ({ id: i.id, qty: i.qty })) });
+      const chosenLocation = location.location ? locationUrl(location.location) : location.maps_url;
+      const lines = [
+        `طلب جديد — ${result.store_name}`, `رقم الطلب: ${result.id.slice(0, 8)}`,
+        `الاسم: ${form.name || 'غير مذكور'}`, `الهاتف: ${form.phone || 'غير مذكور'}`,
+        `المحافظة: ${form.city || 'غير مذكور'}`, `العنوان: ${form.address || 'غير مذكور'}`,
+        chosenLocation ? `الموقع: ${chosenLocation}` : '', form.notes ? `ملاحظات: ${form.notes}` : '',
+        'تفاصيل الطلب:', ...result.items.map(i => `${i.name} × ${i.qty} — ${formatPrice(i.price * i.qty)}`),
+        `مجموع المنتجات: ${formatPrice(result.subtotal)}`, `التوصيل: ${formatPrice(result.delivery_fee)}`, `الإجمالي: ${formatPrice(result.total)}`,
+      ].filter(Boolean).join('\n');
+      setReceipt({ ...result, whatsapp_url: `https://wa.me/${result.whatsapp_number}?text=${encodeURIComponent(lines)}` });
+    } catch (e) { setError(e.message); }
+    finally { setSent(false); }
   };
+
+  if (receipt) return <section className="max-w-xl mx-auto px-5 py-16 text-center">
+    <ShieldCheck size={52} className="mx-auto text-green-600 mb-5" /><h1 className="text-2xl font-extrabold mb-3">تم حفظ طلبك</h1>
+    <p className="text-gray-500 mb-2">رقم الطلب: <strong dir="ltr">{receipt.id.slice(0, 8)}</strong></p><p className="font-bold text-pink-600 mb-6">الإجمالي: {formatPrice(receipt.total)}</p>
+    <p className="text-gray-600 mb-5">اضغط أدناه لفتح واتساب وإرسال تفاصيل الطلب لتأكيده مع المتجر.</p>
+    <a className="inline-flex items-center gap-2 rounded-full bg-green-600 text-white px-8 py-4 font-bold" href={receipt.whatsapp_url} target="_blank" rel="noopener noreferrer"><MessageCircle size={22} />فتح واتساب لتأكيد الطلب</a>
+    <button className="block mx-auto mt-6 text-sm text-gray-500" onClick={() => { clearCart(); navigate('/'); }}>العودة للمتجر</button>
+  </section>;
 
   if (items.length === 0 && !sent) {
     return (
@@ -1027,15 +946,17 @@ const Checkout = () => {
             <label className="block text-sm font-medium text-gray-700 mb-1.5">العنوان التفصيلي {isKidsVideoOnly ? "(اختياري)" : "*"}</label>
             <input required={!isKidsVideoOnly} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="الحي، الشارع، أقرب نقطة دالة" className="w-full border-2 border-pink-100 focus:border-pink-400 outline-none rounded-xl px-4 py-3" data-testid="checkout-address" />
           </div>
+          <LocationPicker value={location} onChange={setLocation} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">ملاحظات (اختياري)</label>
             <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} placeholder="أي ملاحظات إضافية على طلبج..." className="w-full border-2 border-pink-100 focus:border-pink-400 outline-none rounded-xl px-4 py-3 resize-none" data-testid="checkout-notes" />
           </div>
 
+          {error && <p role="alert" className="text-red-700 bg-red-50 rounded-xl p-3">{error}</p>}
           <button type="submit" disabled={sent} className="w-full bg-[#25d366] hover:bg-green-600 disabled:opacity-60 text-white py-4 rounded-full font-bold text-lg flex items-center justify-center gap-2 transition" data-testid="submit-order">
-            <MessageCircle size={22} /> {sent ? "جاري التوجيه..." : "إرسال الطلب عبر واتساب"}
+            <MessageCircle size={22} /> {sent ? "جاري حفظ الطلب…" : "حفظ الطلب والمتابعة لواتساب"}
           </button>
-          <p className="text-center text-xs text-gray-500">سيتم تحويلج لواتساب لإكمال الطلب مع تأكيد التفاصيل</p>
+          <p className="text-center text-xs text-gray-500">تُحفظ بيانات الطلب لدى المتجر، ثم يمكنك فتح واتساب لإرساله وتأكيده.</p>
         </form>
 
         <aside className="bg-pink-50/50 rounded-3xl border border-pink-100 p-6 h-fit lg:sticky lg:top-28">
@@ -1071,28 +992,14 @@ const Checkout = () => {
 };
 
 // ============== FOOTER ==============
-const Footer = () => (
-  <footer className="bg-gradient-to-br from-pink-900 via-rose-900 to-pink-950 text-pink-100">
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center">
-      <div className="text-sm text-pink-300/70">
-        © 2026 كليشة - جميع الحقوق محفوظة
-      </div>
-    </div>
-  </footer>
-);
-
-// ============== FLOATING WHATSAPP ==============
-const FloatingWhatsApp = () => (
-  <a
-    href={`https://wa.me/${WHATSAPP_NUMBER}`}
-    target="_blank"
-    rel="noopener noreferrer"
-    className="fixed bottom-6 left-6 z-30 w-14 h-14 rounded-full bg-[#25d366] hover:bg-green-600 text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-110"
-    data-testid="floating-whatsapp"
-  >
-    <MessageCircle size={26} />
-  </a>
-);
+const Footer = () => {
+  const { settings } = useStore();
+  return <footer className="bg-gradient-to-br from-pink-900 via-rose-900 to-pink-950 text-pink-100"><div className="max-w-7xl mx-auto px-4 py-6 flex flex-wrap justify-between items-center gap-3 text-sm"><span>© {new Date().getFullYear()} {settings.store_name} — جميع الحقوق محفوظة</span><Link to="/admin" className="text-pink-300 hover:text-white">إدارة المتجر</Link></div></footer>;
+};
+const FloatingWhatsApp = () => {
+  const { settings } = useStore();
+  return <a href={`https://wa.me/${settings.whatsapp_number}`} target="_blank" rel="noopener noreferrer" aria-label="تواصل عبر واتساب" className="fixed bottom-6 left-6 z-30 w-14 h-14 rounded-full bg-[#25d366] hover:bg-green-600 text-white shadow-2xl flex items-center justify-center" data-testid="floating-whatsapp"><MessageCircle size={26} /></a>;
+};
 
 // ============== APP ==============
 function App() {
@@ -1104,7 +1011,7 @@ function App() {
   }, []);
 
   return (
-    <CartProvider>
+    <StoreProvider><CartProvider>
       <HashRouter>
         <div dir="rtl" className="min-h-screen flex flex-col bg-white" style={{ fontFamily: "'Tajawal', 'Cairo', sans-serif" }}>
           <Header />
@@ -1116,6 +1023,7 @@ function App() {
               <Route path="/search" element={<SearchPage />} />
               <Route path="/wishlist" element={<WishlistPage />} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/admin" element={<Admin />} />
             </Routes>
           </main>
           <Footer />
@@ -1123,7 +1031,7 @@ function App() {
           <FloatingWhatsApp />
         </div>
       </HashRouter>
-    </CartProvider>
+    </CartProvider></StoreProvider>
   );
 }
 

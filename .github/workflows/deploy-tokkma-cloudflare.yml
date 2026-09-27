@@ -1,0 +1,47 @@
+name: Deploy Tokkma to Cloudflare
+on:
+  workflow_dispatch:
+    inputs:
+      connect_domains:
+        description: Connect tokkma.com and www.tokkma.com after the worker passes health checks
+        type: boolean
+        default: false
+  push:
+    branches: [tokkma-cloudflare]
+permissions:
+  contents: read
+concurrency:
+  group: tokkma-cloudflare
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || vars.CLOUDFLARE_DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: tokkma-production
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+      - run: npm ci --legacy-peer-deps --ignore-scripts
+        working-directory: frontend
+      - run: npm test
+      - run: npm --prefix frontend test -- --watchAll=false --runInBand
+        env:
+          CI: 'true'
+      - run: npm run build
+        env:
+          PUBLIC_URL: /
+          GENERATE_SOURCEMAP: 'false'
+      - run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ADMIN_PASSWORD_HASH: ${{ secrets.ADMIN_PASSWORD_HASH }}
+          ADMIN_USERNAME: ${{ vars.ADMIN_USERNAME || 'admin' }}
+          TOKKMA_CUSTOM_DOMAINS: ${{ inputs.connect_domains && 'true' || 'false' }}

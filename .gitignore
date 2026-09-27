@@ -5,3 +5,10 @@ backend/.env
 frontend/.env
 *.log
 .DS_Store
+
+node_modules/
+.wrangler/
+wrangler.deploy.json
+.dev.vars
+.env
+.test-state/
